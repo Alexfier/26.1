@@ -18,7 +18,7 @@ python manage.py loaddata user_fixture.json --format json
 
 1. Клонируйте репозиторий:
 ```
-https://github.com/IvanRas/project23/tree/develop
+https://github.com/Alexfier/26.1.git
 ```
 
 2. Установите зависимости:
