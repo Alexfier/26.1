@@ -1,16 +1,19 @@
 from django.contrib import admin
-from catalog.models import Product, Category
-
-# Register your models here.
-
-
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "id", "price", "category", "owner")
-    list_filter = ("category",)
-    search_fields = ("name", "description")
+from .models import Product, Category
 
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "id",)
+    list_display = ("id", "name_category")
+
+
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ('name', 'price', 'status', 'owner', 'created_at')
+    list_filter = ('status', 'category', 'owner')
+    search_fields = ('name', 'description', 'owner__username')
+
+    def save_model(self, request, obj, form, change):
+        if not change:  # Если это создание нового объекта
+            obj.owner = request.user
+        super().save_model(request, obj, form, change)

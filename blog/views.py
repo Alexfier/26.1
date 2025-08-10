@@ -1,50 +1,45 @@
-from django.views.generic import DetailView, ListView, DeleteView
-from django.views.generic.edit import CreateView, UpdateView
-from django.urls import reverse_lazy, reverse
-from .forms import BlogForm
-from .models import Blog
-from django.shortcuts import render
+from django.shortcuts import reverse
+from django.views.generic.edit import CreateView
+from django.views.generic import ListView, DetailView, UpdateView, DeleteView
+from django.urls import reverse_lazy
+from blog.models import Post
 
+class PostCreate(CreateView):
+    model = Post
+    fields = ['name', 'description', 'image']
+    template_name = 'post_form.html'
+    success_url = reverse_lazy('blog:post_list')
 
-class BlogListView(ListView):
-    model = Blog
-    template_name = 'blog/home.html'
-    context_object_name = 'blogs'
+class PostListView(ListView):
+    model = Post
+    template_name = 'post_list.html'
+    context_object_name = 'posts'
 
     def get_queryset(self):
-        return Blog.objects.filter(publication_sign=True)
+        queryset = super().get_queryset()
+        return queryset.filter(publication=True)
 
-
-class BlogCreateView(CreateView):
-    model = Blog
-    form_class = BlogForm
-    template_name = 'blog/blog_form.html'
-    success_url = reverse_lazy('blog:home')
-
-
-class BlogDetailView(DetailView):
-    model = Blog
-    template_name = 'blog/blog.html'
-    context_object_name = 'blog'
+class PostDetailView(DetailView):
+    model = Post
+    template_name = 'post_detail.html'
+    context_object_name = 'post'
 
     def get_object(self, queryset=None):
         self.object = super().get_object(queryset)
-        self.object.count_of_views += 1
+        self.object.views += 1
         self.object.save()
         return self.object
 
-
-class BlogUpdateView(UpdateView):
-    model = Blog
-    form_class = BlogForm
-    template_name = 'blog/blog_form.html'
-    success_url = reverse_lazy('blog:home')
+class PostUpdateView(UpdateView):
+    model = Post
+    fields = ['name', 'description', 'image', 'publication_attribute']
+    template_name = 'post_form.html'
+    success_url = reverse_lazy('blog:post_list')
 
     def get_success_url(self):
-        return reverse('blog:blog_detail', args=[self.kwargs.get('pk')])
+        return reverse('blog:post_detail', args=[self.kwargs.get('pk')])
 
-
-class BlogDeleteView(DeleteView):
-    model = Blog
-    template_name = 'blog/blog_delete.html'
-    success_url = reverse_lazy('blog:home')
+class PostDeliteViev(DeleteView):
+    model = Post
+    template_name = 'post_delite.html'
+    success_url = reverse_lazy('blog:post_list')

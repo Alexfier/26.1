@@ -1,48 +1,58 @@
 from django.db import models
-from django.conf import settings
+from django.contrib.auth import get_user_model
+User = get_user_model()
+
+class Category(models.Model):
+    name_category = models.CharField(max_length=150)
+    description = models.TextField(blank=True, null=True)
+    slug = models.SlugField(max_length=100, unique=True, default='машинка')
+
+    class Meta:
+        verbose_name = "Категория"
+        verbose_name_plural = "Категории"
+
+
+    def __str__(self):
+        return self.name_category
 
 
 class Product(models.Model):
-    name = models.CharField(max_length=250, verbose_name='название', help_text='Введите название')
-    description = models.TextField(max_length=250, verbose_name='описание', help_text='Введите описание')
-    image = models.ImageField(upload_to='product/photo', blank=True, null=True, verbose_name='фото',
-                              help_text='Загрузити фотографию')
-    category = models.ForeignKey("Category", on_delete=models.CASCADE, verbose_name='категория',
-                                 help_text='Введите категорию', blank=True, null=True)
-    price = models.IntegerField(verbose_name='Цена', help_text='Введите цену', blank=True, null=True)
-    created_at = models.DateField(verbose_name='дата создания', help_text='Введите датe создания', blank=True,
-                                  null=True)
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='дата последнего изменения', blank=True, null=True)
-    is_available = models.BooleanField(default=False, verbose_name="Доступность в каталоге")
-    owner = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        verbose_name="Владелец",
-        related_name="products",
-        null=True,
+    PUBLICATION_STATUS = [
+        ('draft', 'Черновик'),
+        ('moderation', 'На модерации'),
+        ('published', 'Опубликовано'),
+        ('rejected', 'Отклонено'),
+        ('archived', 'В архиве'),
+    ]
+    status = models.CharField(
+        max_length=20,
+        choices=PUBLICATION_STATUS,
+        default='draft',
+        verbose_name='Статус публикации'
     )
-
-    def __str__(self):
-        return f'{self.name}'
+    owner = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        verbose_name='Владелец',
+        related_name='products',
+        blank=True, null=True
+    )
+    name = models.CharField(max_length=150, verbose_name="Имя_продукта")
+    description = models.TextField(blank=True, null=True)
+    image = models.ImageField(blank=True, null=True, upload_to='product')
+    category = models.ForeignKey(Category, on_delete=models.CASCADE)
+    price = models.IntegerField()
+    created_at = models.DateTimeField(auto_created=True, auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        verbose_name = 'продукт'
-        verbose_name_plural = 'продукты'
+        verbose_name = "Продукт"
+        verbose_name_plural = "Продукты"
+        ordering = ["description", "price"]
         permissions = [
-            ("can_unpublish_product", "Can unpublish product"),
-            ("remove_any_product", "Remove any product"),
+            ("can_unpublish_product", "Может отменять публикацию продукта"),
+            ('can_delete_any_product', 'Может удалять ЛЮБОЙ продукт'),
         ]
 
-
-class Category(models.Model):
-    name = models.CharField(max_length=250, verbose_name='название', help_text='Введите название', blank=True,
-                            null=True)
-    description = models.TextField(max_length=250, verbose_name='описание', help_text='Введите описание', blank=True,
-                                   null=True)
-
     def __str__(self):
-        return f'{self.name}'
-
-    class Meta:
-        verbose_name = 'категория'
-        verbose_name_plural = 'категории'
+        return self.name

@@ -1,11 +1,9 @@
 from django.contrib import admin
-from .models import Blog
-
-# Register your models here.
+from .models import Post
 
 
-@admin.register(Blog)
+@admin.register(Post)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ('id', 'title', 'content', 'publication_sign')
-    list_filter = ('title',)
-    search_fields = ('title', 'content',)
+    list_display = ("id", "name", "created_at", "publication", "views")
+    list_filter = ("name",)
+    search_fields = ("name", "description")

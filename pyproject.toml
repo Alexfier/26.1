@@ -1,12 +1,17 @@
 [tool.poetry]
-name = "project23"
+name = "pythonproject1"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Ilia Ryutin <iryutin@mail.ru>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.13"
+django = "^5.2"
+black = "^25.1.0"
+psycopg2-binary = "^2.9.10"
+pillow = "^11.2.1"
+python-dotenv = "^1.1.0"
 
 
 [build-system]
