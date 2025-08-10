@@ -1,143 +1,125 @@
-from django.http import HttpResponse
-from django.shortcuts import render, get_object_or_404
-from django.views import View
-from django.urls import reverse_lazy, reverse
-from .forms import ProductForm, Category, ProductModeratorForm
-from .services import get_products_by_category, CategoryService
-from django.views.generic import ListView, DetailView, CreateView, DeleteView, UpdateView
-from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.core.exceptions import PermissionDenied
-from django.core.cache import cache
-from django.views.decorators.cache import cache_page
+from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin, UserPassesTestMixin
+from django.http import Http404
+from django.shortcuts import render
 from django.utils.decorators import method_decorator
+from django.views.decorators.cache import cache_page
+from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
 
-from catalog.models import Product
+from catalog.forms import ProductFormValidator
+from catalog.models import Product, ContactInfo, Category
+from catalog.services import get_product_list_cache, get_products_by_category
 
 
-# Create your views here.
-
-# @method_decorator(cache_page(60 * 15), name='dispatch')
-class HomeListView(ListView):
+class IndexListView(ListView):
+    ''' Главной страница, просмотр списка продуктов'''
     model = Product
-    template_name = 'catalog/base.html'
+    template_name = 'catalog/index.html'
     context_object_name = 'products'
+    permission_required = 'catalog.view_product'
 
-    # def get_queryset(self):
-    #     cache_kay = 'all_available_products'
-    #     products = cache.get(cache_kay)
-    #     if products is None:
-    #         products = Product.objects.filter(is_available=True)
-    #         cache.set(cache_kay, products, 60 * 15)
-    #     return products
+    def get_queryset(self):
+        return get_product_list_cache()
 
 
-# def home(request):
-#     products = Product.objects.all()
-#     context = {'products': products}
-#     return render(request, 'base.html', context=context)
+class ContactsListView(ListView):
+    '''Страница Контактов '''
+    model = ContactInfo
+    template_name = 'catalog/contacts.html'
+    context_object_name = 'contact_info'
 
 
-def contacts(request):
-    if request.method == 'POST':
-        # Получение данных из формы
-        name = request.POST.get('name')
-        message = request.POST.get('message')
-        # Обработка данных (например, сохранение в БД, отправка email и т. д.)
-        # Здесь мы просто возвращаем простой ответ
-        return HttpResponse(f"Спасибо, {name}! Ваше сообщение получено.")
-    return render(request, 'contacts.html')
-
-
-class CatalogContactsView(View):
-    def get(self, request):
-        return render(request, 'catalog/contacts.html')
-
-    def post(self, request):
-        #Получение данных из формы
-        name = request.POST.get('name')
-        message = request.POST.get('message')
-        # Обработка данных (например, сохранение в БД, отправка email и т. д.)
-        # Здесь мы просто возвращаем простой ответ
-        return HttpResponse(f"Спасибо, {name}! Ваше сообщение получено.")
-
-
-class ProductCreateView(LoginRequiredMixin, CreateView):
+@method_decorator(cache_page(60 * 5), name='dispatch')
+class ProductDetailsView(LoginRequiredMixin, DetailView):
+    '''Страцина детальной информации продукта, с возможностью редактирования и удаления. Добавил кеширование '''
     model = Product
-    form_class = ProductForm
-    template_name = 'catalog/product_form.html'
-    success_url = reverse_lazy('catalog:home')
+    template_name = 'catalog/product_details.html'
+    context_object_name = 'products'
+    permission_required = 'catalog.view_product'
+
+
+class AddProductCreateView(LoginRequiredMixin, CreateView):
+    '''Страница добавления продукта '''
+    model = Product
+    template_name = 'catalog/add_product.html'
+    permission_required = 'catalog.add_product'
+    form_class = ProductFormValidator
+
+    def get_success_url(self):
+        return f'/product_details/{self.object.pk}/'
 
     def form_valid(self, form):
         form.instance.owner = self.request.user
         return super().form_valid(form)
 
+    def form_invalid(self, form):
+        # Обработка ошибок формы
+        print("Ошибки формы:", form.errors)  # Отладка
+        return super().form_invalid(form)
 
-class ProductUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+
+class EditProductUpdateView(LoginRequiredMixin, UserPassesTestMixin, UpdateView):
+    '''Страница редактирования продукта, только для владельцев и суперюзеров'''
     model = Product
-    form_class = ProductForm
-    template_name = 'catalog/product_form.html'
-    success_url = reverse_lazy("catalog:home")
+    form_class = ProductFormValidator
+    context_object_name = 'products'
+    template_name = 'catalog/edit_product.html'
+    permission_required = 'catalog.change_product'
 
-    def get_form_class(self):
-        if self.request.user.is_superuser:
-            return ProductForm
-        if self.request.user.has_perm("catalog.can_unpublish_product"):
-            return ProductModeratorForm
-        if self.request.user.has_perm("catalog.remove_any_product"):
-            return ProductModeratorForm
-        return ProductForm
+    def get_success_url(self):
+        return f'/product_details/{self.object.pk}/'
 
     def test_func(self):
+        """Проверка является ли пользователь владельцем продукта"""
         product = self.get_object()
-        return self.request.user == product.owner or self.request.user.has_perm(
-            "catalog.can_unpublish_product"
-        )
+        user = self.request.user
+        return user == product.owner or user.groups.filter(name='Модератор продуктов').exists() or user.is_superuser
 
     def handle_no_permission(self):
-        raise PermissionDenied
+        """Обработка отказа в доступе"""
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Вы не являетесь владельцем этого продукта")
+
+    # def get_queryset(self):
+    #     """Фильтрует продукты только для текущего пользователя"""
+    #     return Product.objects.filter(owner=self.request.user)
+
+    # def get_queryset(self):
+    #     if not self.request.user.has_perm('catalog.change_product'):
+    #         return Product.objects.none()
+    #     return Product.objects.all()
 
 
-# @method_decorator(cache_page(60 * 15), name='dispatch')
-class ProductDetailView(LoginRequiredMixin, DetailView):
+class DeleteProductDeleteView(LoginRequiredMixin, UserPassesTestMixin, DeleteView):
+    '''Страница удаления продукта, только для владельцев и суперюзеров'''
     model = Product
-    template_name = 'catalog/product_detail.html'
-    context_object_name = 'product'
+    template_name = 'catalog/delete_product.html'
+    success_url = '/'
+    context_object_name = 'products'
+    permission_required = 'catalog.delete_product'
 
-    def get_queryset(self):
-        queryset = cache.get('category_queryset')
-        if not queryset:
-            queryset = super().get_queryset()
-            cache.set('category_queryset', queryset, 60 * 15)
-        return queryset
+    def test_func(self):
+        """Проверка является ли пользователь владельцем продукта"""
+        product = self.get_object()
+        user = self.request.user
+        return user == product.owner or user.groups.filter(name='Модератор продуктов').exists() or user.is_superuser
 
-
-class ProductDeleteView(LoginRequiredMixin,DeleteView):
-    model = Product
-    template_name = 'catalog/product_delete.html'
-    success_url = reverse_lazy('catalog:home')
-
-
-class CategoryProductDetailView(DetailView):
-    model = Category
-    template_name = 'catalog/base.html'
-
-    def get_context_data(self, **kwargs):
-        # Получаем стандартный контекст данных из родительского класса
-        context = super().get_context_data(**kwargs)
-        # Получаем ID категория из объекта
-        category_id = self.kwargs.get('pk')
-        context['name'] = CategoryService.get_full_name(category_id)
-        context['products'] = Product.objects.filter(category_id=category_id)
-        return context
+    def handle_no_permission(self):
+        """Обработка отказа в доступе"""
+        from django.http import HttpResponseForbidden
+        return HttpResponseForbidden("Вы не являетесь владельцем этого продукта")
 
 
-class CategoryProductView(ListView):
-    model = Category
-    template_name = 'catalog/category_products.html'
+def products_by_category(request, category_name):
+    '''Страница всех продуктов определенной категории  '''
+    products = get_products_by_category(category_name)
 
+    if not products:
+        raise Http404("Категория не найдена или в этой категории нет товаров.")
 
-# def product_detail(request, pk):
-#     product = get_object_or_404(Product, id=pk)
-#     context = {'product': product}
-#     return render(request, 'product_detail.html', context=context)
+    category_exists = Category.objects.filter(name=category_name).exists()
 
+    return render(request, 'catalog/products_by_category.html', {
+        'products': products,
+        'category_name': category_name,
+        'category_exists': category_exists
+    })

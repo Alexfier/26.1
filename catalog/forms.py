@@ -1,69 +1,71 @@
 from django import forms
-from .models import Product, Category
-from django.core.exceptions import ValidationError
-
-forbidden = ['казино', 'криптовалюта', 'крипта', 'биржа',
-             'дешево', 'бесплатно', 'обман', 'полиция', 'радар']
+from .models import Product
+from PIL import Image
 
 
 class ProductForm(forms.ModelForm):
+    ''' Форма продуктов '''
+
     class Meta:
         model = Product
-        fields = ['name', 'description', 'image', 'category', 'price', 'created_at', 'is_available']
-
-    def __init__(self, *args, **kwargs):
-        super(ProductForm, self).__init__(*args, **kwargs)
-        self.fields['name'].widget.attrs.update({
-            'class': 'form-control',  # Добавление CSS-класса для стилизации поля
-            'placeholder': 'Введите имя'  # Текст подсказки внутри поля
-        })
-        self.fields['description'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Введите описание'})
-        self.fields['image'].widget.attrs.update({'class': 'form-control'})
-        self.fields['category'].widget.attrs.update({'class': 'form-control'})
-        self.fields['price'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Введите цену'})
-        self.fields['created_at'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Введите дату'})
-
-    def clean_name(self):
-        name = self.cleaned_data.get('name')
-        if any(word in name.lower() for word in forbidden):
-            raise ValidationError("Название не должно содержать запрещенные слова.")
-        return name
-
-    def clean_description(self):
-        description = self.cleaned_data.get('description')
-        if any(word in description.lower() for word in forbidden):
-            raise ValidationError("Название не должно содержать запрещенные слова.")
-        return description
-
-    def clean_price(self):
-        price = self.cleaned_data.get('price')
-        if price < 0:
-            raise ValidationError("Неверная цена")
-        return price
-
-    def clean_image(self):
-        image = self.cleaned_data.get('image')
-        if image:
-            if image.size > 5 * 1024 * 1025:
-                raise ValidationError("Файл больше 5МБ")
-            if not (image.name.endswith('.jpg') or image.name.endswith('.jpeg') or image.name.endswith('.png')):
-                raise ValidationError("Файл не допустимого формата")
-        return image
+        fields = ['name', 'description', 'images', 'category', 'purchase_price']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'placeholder': 'Введите название продукта',
+                'class': 'form-control'
+            }),
+            'description': forms.Textarea(attrs={
+                'rows': 4,
+                'placeholder': 'Введите описание продукта',
+                'class': 'form-control'
+            }),
+            'images': forms.ClearableFileInput(attrs={
+                'class': 'form-control-file'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'purchase_price': forms.NumberInput(attrs={
+                'placeholder': 'Введите цену',
+                'class': 'form-control'
+            }),
+        }
 
 
-class ProductModeratorForm(forms.ModelForm):
+class ProductFormValidator(forms.ModelForm):
+    '''Форма для продукта, с валидацией '''
+
     class Meta:
         model = Product
-        fields = ["is_available"]
+        fields = ['name', 'description', 'images', 'category', 'is_published', 'purchase_price']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
-            field.widget.attrs["class"] = "form-control"
-        self.fields["is_available"].widget.attrs.update({"class": "form-check"})
+        self.fields['name'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Введите название продукта'})
+        self.fields['description'].widget.attrs.update(
+            {'rows': '2', 'class': 'form-control', 'placeholder': 'Введите описание продукта'})
+        self.fields['images'].widget.attrs.update({'class': 'form-control-file'})
+        self.fields['category'].widget.attrs.update({'class': 'form-control'})
+        self.fields['purchase_price'].widget.attrs.update({'class': 'form-control', 'placeholder': 'Введите цену'})
+        self.fields['is_published'].widget.attrs.update({'class': 'form-'})
 
+    def clean_purchase_price(self):
+        '''Функция проверки цены продукта '''
+        price = self.cleaned_data.get('purchase_price')
+        if price is not None and price < 0:
+            raise forms.ValidationError('Цена не может быть отрицательной.')
+        return price
 
-class CategoryForm(forms.ModelForm):
-    class Meta:
-        model = Category
-        fields = ['name', 'description']
+    def clean(self):
+        '''Функция проверки запрещенных слов '''
+        cleaned_data = super().clean()
+        DANGER_WORDS = ['казино', 'криптовалюта', 'крипта', 'биржа', 'дешево', 'бесплатно', 'обман', 'полиция', 'радар']
+
+        description = cleaned_data.get('description', '').lower()
+        name = cleaned_data.get('name', '').lower()
+
+        for word in DANGER_WORDS:
+            if word in description:
+                self.add_error('description', f'Описание не должно содержать слово "{word}".')
+            if word in name:
+                self.add_error('name', f'Название не должно содержать слово "{word}".')

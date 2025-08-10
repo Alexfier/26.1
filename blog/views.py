@@ -1,50 +1,54 @@
-from django.views.generic import DetailView, ListView, DeleteView
-from django.views.generic.edit import CreateView, UpdateView
-from django.urls import reverse_lazy, reverse
-from .forms import BlogForm
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.urls import reverse_lazy
+
 from .models import Blog
-from django.shortcuts import render
+from django.views.generic import CreateView, ListView, UpdateView, DeleteView, DetailView
+from .forms import BlogForm
+
+
+class BlogCreateView(LoginRequiredMixin, CreateView):
+    model = Blog
+    # fields = ['title', 'content', 'preview']
+    form_class = BlogForm
+    template_name = 'blog/add_post.html'
+
+    def get_success_url(self):
+        return f'/blog/detail/{self.object.pk}/'
 
 
 class BlogListView(ListView):
     model = Blog
-    template_name = 'blog/home.html'
-    context_object_name = 'blogs'
+    template_name = 'blog/index.html'
+    context_object_name = 'posts'
 
     def get_queryset(self):
-        return Blog.objects.filter(publication_sign=True)
-
-
-class BlogCreateView(CreateView):
-    model = Blog
-    form_class = BlogForm
-    template_name = 'blog/blog_form.html'
-    success_url = reverse_lazy('blog:home')
+        return Blog.objects.filter(is_published=True)
 
 
 class BlogDetailView(DetailView):
     model = Blog
-    template_name = 'blog/blog.html'
-    context_object_name = 'blog'
+    template_name = 'blog/detail.html'
+    context_object_name = 'post'
 
     def get_object(self, queryset=None):
-        self.object = super().get_object(queryset)
-        self.object.count_of_views += 1
-        self.object.save()
-        return self.object
+        obj = super().get_object(queryset=queryset)
+        obj.views_count += 1
+        obj.save(update_fields=['views_count'])
+        return obj
 
 
-class BlogUpdateView(UpdateView):
+class BlogUpdateView(LoginRequiredMixin, UpdateView):
     model = Blog
     form_class = BlogForm
-    template_name = 'blog/blog_form.html'
-    success_url = reverse_lazy('blog:home')
+    template_name = 'blog/edit_post.html'
+    context_object_name = 'post'
 
     def get_success_url(self):
-        return reverse('blog:blog_detail', args=[self.kwargs.get('pk')])
+        return f'/blog/detail/{self.object.pk}/'
 
 
-class BlogDeleteView(DeleteView):
+class BlogDeleteView(LoginRequiredMixin, DeleteView):
     model = Blog
-    template_name = 'blog/blog_delete.html'
-    success_url = reverse_lazy('blog:home')
+    template_name = 'blog/delete_post.html'
+    success_url = reverse_lazy('blog:index')
+    context_object_name = 'post'
